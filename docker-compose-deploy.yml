@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+    restart: always
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - DEBUG=${DEBUG}
+      - ADMINS_ID=${ADMINS_ID}
+      - ELECTRICITY_CHAT_ID=${ELECTRICITY_CHAT_ID}
+      - PLUMBING_CHAT_ID=${PLUMBING_CHAT_ID}
+      - ELECTRICITY_URL=${ELECTRICITY_URL}
+      - PLUMBING_URL=${PLUMBING_URL}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
