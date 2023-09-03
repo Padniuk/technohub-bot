@@ -8,26 +8,13 @@ from config import config
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.methods.send_message import SendMessage
 from aiogram.methods.edit_message_text import EditMessageText
-from keyboards import take_application
+from keyboards import take_application, choose_service_type, choose_form_type, open_webapp
 from sqlalchemy import insert, select
 from database import Application, Worker, ApplicationWorkerAssociation
 from filters import ChatTypeFilter, PhoneFilter
 from sqlalchemy.orm import exc
-from aiogram.types import InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types.web_app_info import WebAppInfo
-from config import config
 
-router = Router()
-
-@router.message(Command("site_post"))
-async def site_post(message: Message):
-    keyboard = InlineKeyboardBuilder()
-    keyboard.row(InlineKeyboardButton(
-        text='Взяти замовлення', 
-        web_app=WebAppInfo(url=config.plumbing_url))
-    )
-    await message.answer('Відкрити сайт', reply_markup=keyboard.as_markup())
+router = Router()    
 
 @router.message(Command("start"), ChatTypeFilter(chat_type=["private"]))
 async def help(message: Message):
@@ -36,9 +23,26 @@ async def help(message: Message):
 
 @router.message(Command("post"), ChatTypeFilter(chat_type=["private"]))
 async def make_post(message: Message, state: FSMContext):
-    await message.answer("Надавайте кожну відповідь одним повідомленням")
-    await timeout(1)
-    await message.answer("Опишіть суть проблеми одним повідомленням:")
+    await message.answer("Оберіть спосіб подачі заявки", reply_markup=choose_form_type())
+
+@router.callback_query(Text(startswith="site_form"))
+async def fill_site_form(callback: CallbackQuery):
+
+    await callback.message.answer('Відкрити форму:', reply_markup=open_webapp())
+
+
+@router.callback_query(Text(startswith="telegram_answers"))
+async def fill_answers(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    await callback.message.answer("Надавайте кожну відповідь одним повідомленням")
+    await timeout(3)
+    await callback.message.answer("Оберіть тип послуг:", reply_markup=choose_service_type())
+    await state.set_state(ApplicationCreatingStates.service_type)
+
+
+@router.callback_query(ApplicationCreatingStates.service_type)
+async def add_problem(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    await state.update_data(service_type=callback.data)
+    await callback.message.answer("Опишіть суть проблеми одним повідомленням:")
     await state.set_state(ApplicationCreatingStates.problem)
 
 
@@ -72,8 +76,10 @@ async def send_post(message: Message, state: FSMContext, session: AsyncSession):
 
     post_text = f"🔵 Aктивно\n\n" f'{data["problem"]}\n\n' f'Адреса: `{data["address"]}`'
 
+    chat_id = config.plumbing_chat_id if data["service_type"] == 'plumbing' else config.electricity_chat_id
+
     post = await SendMessage(
-        chat_id=config.electricity_chat_id,
+        chat_id=chat_id,
         text=post_text,
         reply_markup=take_application(),
         parse_mode="Markdown",
@@ -81,7 +87,7 @@ async def send_post(message: Message, state: FSMContext, session: AsyncSession):
     post_time = message.date.replace(tzinfo=None)
 
     insert_query = insert(Application).values(
-        application_type='electricity',
+        application_type=data["service_type"],
         name=data["name"],
         phone=data["contacts"],
         problem=data["problem"],

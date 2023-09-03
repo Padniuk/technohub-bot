@@ -2,6 +2,7 @@ from aiogram.fsm.state import StatesGroup, State
 
 
 class ApplicationCreatingStates(StatesGroup):
+    service_type = State()
     problem = State()
     name = State()
     contacts = State()

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     admins_id: str
     electricity_chat_id: int
     plumbing_chat_id: int
+    channel_id: int
     electricity_url: str
     plumbing_url: str
     db_host: str
