@@ -3,6 +3,7 @@ from pydantic import BaseSettings, SecretStr
 
 class Settings(BaseSettings):
     bot_token: SecretStr
+    invite_link: str
     debug: int
     admins_id: str
     electricity_chat_id: int

@@ -19,7 +19,7 @@ class Application(Base):
     complete_time = Column(DateTime, nullable=True)
     message_id = Column(String(50))
     price = Column(Integer, default=0)
-    act_name = Column(String(255), nullable=True)
+    act_id = Column(Integer, default=0)
 
     workers = relationship('Worker', secondary='main_applicationworkerassociation', back_populates='applications')#, lazy='dynamic'
 

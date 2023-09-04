@@ -13,6 +13,7 @@ from sqlalchemy import insert, select
 from database import Application, Worker, ApplicationWorkerAssociation
 from filters import ChatTypeFilter, PhoneFilter
 from sqlalchemy.orm import exc
+from aiogram.exceptions import AiogramError
 
 router = Router()    
 
@@ -108,26 +109,11 @@ async def show_contacts(callback: CallbackQuery, session: AsyncSession):
         
         edited_text = callback.message.text.replace("🔵", "✅")
         edited_text = edited_text.replace("Активно", "Виконується")
-        
-        await EditMessageText(
-            chat_id=callback.message.chat.id,
-            text=edited_text,
-            message_id=callback.message.message_id,
-            reply_markup=None,
-            parse_mode="Markdown",
-        )
-
-
-        address = edited_text.split("\n")[-1].split(": ")[-1]
-        problem = edited_text.split("\n")[2]
-        
-
-        application_select = select(Application).where(
-            (Application.address == address) &
-            (Application.problem == problem)
-        )
+                
+        application_select = select(Application).where(Application.message_id==str(callback.message.message_id))
 
         application = (await session.execute(application_select)).scalar_one()
+        
 
         association = ApplicationWorkerAssociation(
             application_id=application.id,
@@ -143,6 +129,17 @@ async def show_contacts(callback: CallbackQuery, session: AsyncSession):
 
         await SendMessage(chat_id=callback.from_user.id, text=text, parse_mode='Markdown')
 
+        await EditMessageText(
+            chat_id=callback.message.chat.id,
+            text=edited_text,
+            message_id=callback.message.message_id,
+            reply_markup=None,
+            parse_mode="Markdown",
+        )
+
     except exc.NoResultFound:
         await callback.message.answer('Ви не є виконавцем, щоб зареєструватись використайте команду:\n`/registration`', parse_mode='Markdown')
+    except AiogramError:
+        await callback.message.answer(f"Необхідно розпочати [розмову]({config.invite_link}) з ботом", parse_mode='Markdown')
+    
     

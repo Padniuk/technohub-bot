@@ -15,7 +15,6 @@ status_symbol_mapping = {
     "Ready": "✔️",
     "Canceled": "❌"
 }
-today = date.today()
 
 router = Router()
 
@@ -23,8 +22,8 @@ router = Router()
 async def show_all_workers(message: Message, session: AsyncSession):
     worker_query = select(ApplicationWorkerAssociation.worker_id, ApplicationWorkerAssociation.status).join(Application).filter(
         and_(
-            Application.complete_time >= today,
-            Application.complete_time < today + timedelta(days=1)
+            Application.post_time >= date.today(),
+            Application.post_time < date.today() + timedelta(days=1)
         )
     )
 
@@ -40,10 +39,9 @@ async def show_all_workers(message: Message, session: AsyncSession):
     for worker_name, statuses in worker_statuses.items():
         formatted_statuses = ' - '.join(statuses)
         text += f"`{worker_name}`: {formatted_statuses}\n"
-
-    text+="\n\n⚙️ - в роботі\n✔️ - виконано\n❌ - відмова"
-
-    await message.answer(text=text, parse_mode='Markdown')
+    if len(text)>0:
+        text+="\n\n⚙️ - в роботі\n✔️ - виконано\n❌ - відмова"
+        await message.answer(text=text, parse_mode='Markdown')
 
 
 @router.message(Command("worker_status"), ChatTypeFilter(chat_type=["private"]))
@@ -54,23 +52,25 @@ async def show_workers_list(message: Message, session: AsyncSession):
 
     workers_data = [(worker.name,worker.id) for worker in workers.scalars()]
 
-    await message.answer("Виберіть замовлення:", reply_markup=show_workers(workers_data))
+    await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
 
 
 @router.callback_query(Text(startswith="worker"))
 async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
-    application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(Worker.id == int(callback.data.split('_')[2]))
+    application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(and_(Worker.id == int(callback.data.split('_')[2]), Application.post_time >= date.today(), Application.post_time < date.today() + timedelta(days=1)))
     applications = (await session.execute(application_query)).all()
 
     text = f'{callback.data.split("_")[1]} звіт:\n\n'
-
-    for application, status, comment in applications:
-        text+=f'{application.address}:\n'
-        if status == 'Up':
-            text+=f'\tВ роботі\n'
-        elif status == 'Canceled':
-            text+=f'\tВімовився з наступної причини:\n\t\t{comment}\n'
-        else:
-            text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_name})\n'
-
-    await callback.message.answer(text=text, parse_mode='Markdown')
+    if len(applications)>0:
+        for application, status, comment in applications:
+            text+=f'{application.address}:\n'
+            if status == 'Up':
+                text+=f'\tВ роботі\n'
+            elif status == 'Canceled':
+                text+=f'\tВімовився з наступної причини:\n\t\t{comment}\n'
+            else:
+                text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_name})\n'
+        await callback.message.answer(text=text, parse_mode='Markdown')
+    else:
+        text+='\tРобіт не виконував\n'
+        await callback.message.answer(text=text, parse_mode='Markdown')

@@ -40,8 +40,8 @@ async def admin_commands(bot: Bot):
         BotCommand(command="worker_status", description="Incividual worker statistics"),
         BotCommand(command="day_report", description="All worker statistics")
     ]
-    
-    await bot.set_my_commands(
-        admin_commands, 
-        scope=BotCommandScopeChat(chat_id=config.admins_id)
-    )
+    for admin_id in config.admins_id.split(', '):
+        await bot.set_my_commands(
+            admin_commands, 
+            scope=BotCommandScopeChat(chat_id=admin_id)
+        )

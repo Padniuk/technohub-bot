@@ -14,6 +14,7 @@ from sqlalchemy import insert, select, update, and_
 from filters import PhoneFilter
 from config import config
 from keyboards import show_applications, take_application
+from aiogram.methods.create_chat_invite_link import CreateChatInviteLink
 
 router = Router()
 
@@ -55,6 +56,7 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     
     await SetMyCommands(commands=worker_commands, scope=BotCommandScopeChat(chat_id=user_id))
     await message.answer("Робітник доданий в базу")
+    await message.answer(f'Для можливості брати заявки почність [спілкування]({config.invite_link}) з ботом', parse_mode='Markdown')
 
 
 @router.message(Command("complete"))
@@ -151,11 +153,11 @@ async def cancel_application(message: Message, state: FSMContext, session: Async
     application = (await session.execute(application_query)).scalar_one()
 
     message_id = application.message_id
-    chat_id = config.electricity_chat_id
+    chat_id = config.plumbing_chat_id if application.application_type == 'plumbing' else config.electricity_chat_id
 
-    text = f"🔵 Aктивно\n\n" f'{application.problem}\n\n' f'Адреса: `{application.address}`\n\nВідмовились у через:\n{data["comment"]}'
-
+    text = f"🔵 Aктивно\n\n" f'{application.problem}\n\n' f'Адреса: `{application.address}`\n\nВідмовлялись через:\n{data["comment"]}'
+    
     await message.answer("Замовлення скасовано")
-    await EditMessageText(chat_id=chat_id, message_id=message_id, text=text, reply_markup=take_application(), parse_mode='Markdown')
+    await EditMessageText(chat_id=chat_id, message_id=int(message_id), text=text, reply_markup=take_application(), parse_mode='Markdown')
 
 
