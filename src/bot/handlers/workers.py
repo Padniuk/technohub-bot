@@ -2,37 +2,38 @@ from aiogram import Router, F
 from aiogram.filters import Command, Text
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
-from database import Worker, Application, ApplicationWorkerAssociation
+from bot.database.models import Worker, Application, ApplicationWorkerAssociation
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.methods.set_my_commands import SetMyCommands
 from aiogram.types import BotCommand, BotCommandScopeChat
-from states import WorkerStates, CancelStates, CompleteStates
+from bot.states.states import WorkerStates, CancelStates, CompleteStates
 from aiogram.methods.edit_message_text import EditMessageText
 from aiogram.methods.send_media_group import SendMediaGroup
 from aiogram.types.input_media_photo import InputMediaPhoto
+from aiogram.types.input_media_document import InputMediaDocument
 from sqlalchemy import insert, select, update, and_
-from filters import PhoneFilter
-from config import config
-from keyboards import show_applications, take_application
-from aiogram.methods.create_chat_invite_link import CreateChatInviteLink
+from bot.filters.phone import PhoneFilter
+from bot.config import config
+from bot.keyboards.workers import show_applications
+from bot.keyboards.users import take_application
 
-router = Router()
+worker_router = Router()
 
 
-@router.message(Command("registration"))
+@worker_router.message(Command("registration"))
 async def add_worker(message: Message, state: FSMContext):
     await message.answer("Введіть ім'я:")
     await state.set_state(WorkerStates.name)
 
 
-@router.message(WorkerStates.name, F.text)
+@worker_router.message(WorkerStates.name, F.text)
 async def add_worker_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
     await message.answer("Введіть телефон:")
     await state.set_state(WorkerStates.phone)
 
 
-@router.message(WorkerStates.phone, PhoneFilter())    
+@worker_router.message(WorkerStates.phone, PhoneFilter())    
 async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await state.update_data(phone=message.text)
     data = await state.get_data()
@@ -59,7 +60,7 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await message.answer(f'Для можливості брати заявки почність [спілкування]({config.invite_link}) з ботом', parse_mode='Markdown')
 
 
-@router.message(Command("complete"))
+@worker_router.message(Command("complete"))
 async def show_all_applications(message: Message, state: FSMContext, session: AsyncSession):
     application_query = (
         select(Application)
@@ -78,21 +79,21 @@ async def show_all_applications(message: Message, state: FSMContext, session: As
         await message.answer("Ви не маєте замовлень")
 
 
-@router.callback_query(Text(startswith="chose_application"), CompleteStates.application_id)
+@worker_router.callback_query(Text(startswith="chose_application"), CompleteStates.application_id)
 async def chose_application(callback: CallbackQuery, state: FSMContext): 
     await state.update_data(application_id=int(callback.data.split('_')[2]))
     await callback.message.answer("Вкажіть суму:")
     await state.set_state(CompleteStates.price)
 
 
-@router.message(CompleteStates.price)
+@worker_router.message(CompleteStates.price)
 async def get_price(message: Message, state: FSMContext):
     await state.update_data(price=int(message.text))
     await message.answer("Надайте акт виконаних робіт:")
     await state.set_state(CompleteStates.report)
 
 
-@router.message(CompleteStates.report, F.photo)
+@worker_router.message(CompleteStates.report, F.photo)
 async def chose_application(message: Message, state: FSMContext, session: AsyncSession):
     data = await state.get_data()
     await state.clear()
@@ -105,18 +106,38 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
     await session.execute(application_query)
     application_query = update(Application).where(Application.id == data['application_id']).values(complete_time=message.date.replace(tzinfo=None), 
                                                                                                    price=data['price'],
-                                                                                                   act_name=f'{post[0].message_id}')
+                                                                                                   act_id=f'{post[0].message_id}')
     
     await session.execute(application_query)
     await session.commit()
     await message.answer("Заявку зачинено")
 
 
-@router.message(CompleteStates.report, ~F.photo)
+@worker_router.message(CompleteStates.report, F.document)
+async def chose_application(message: Message, state: FSMContext, session: AsyncSession):
+    data = await state.get_data()
+    await state.clear()
+
+    media_group = [InputMediaDocument(media=message.document.file_id,caption=f'Акт - {data["application_id"]}\nCума:{data["price"]}')]
+
+    post = await SendMediaGroup(chat_id=config.channel_id, media=media_group)
+
+    application_query = update(ApplicationWorkerAssociation).where(ApplicationWorkerAssociation.application_id == data['application_id']).values(status='Ready')
+    await session.execute(application_query)
+    application_query = update(Application).where(Application.id == data['application_id']).values(complete_time=message.date.replace(tzinfo=None), 
+                                                                                                   price=data['price'],
+                                                                                                   act_id=f'{post[0].message_id}')
+    
+    await session.execute(application_query)
+    await session.commit()
+    await message.answer("Заявку зачинено")
+
+
+@worker_router.message(CompleteStates.report, (~F.photo & ~F.document))
 async def send_photo_error(message: Message, state: FSMContext):
     await message.answer('Акт виконаних робіт це фото')
 
-@router.message(Command("cancel"))
+@worker_router.message(Command("cancel"))
 async def show_all_applications(message: Message, state: FSMContext, session: AsyncSession):
     application_query = (
         select(Application)
@@ -135,14 +156,14 @@ async def show_all_applications(message: Message, state: FSMContext, session: As
         await message.answer("Ви не маєте замовлень")
 
 
-@router.callback_query(Text(startswith="chose_application"), CancelStates.application_id)
+@worker_router.callback_query(Text(startswith="chose_application"), CancelStates.application_id)
 async def chose_application(callback: CallbackQuery, state: FSMContext): 
     await state.update_data(application_id=int(callback.data.split('_')[2]))
     await callback.message.answer("Вкажіть причину відмови:")
     await state.set_state(CancelStates.comment)
 
 
-@router.message(CancelStates.comment)
+@worker_router.message(CancelStates.comment)
 async def cancel_application(message: Message, state: FSMContext, session: AsyncSession): 
     await state.update_data(comment=message.text)
     data = await state.get_data()

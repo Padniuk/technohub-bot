@@ -5,10 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from datetime import timedelta, date
 from collections import defaultdict
-from filters import ChatTypeFilter
-from keyboards import show_workers
-from database import Application, Worker, ApplicationWorkerAssociation
-from config import config
+from bot.filters.chats import ChatTypeFilter
+from bot.keyboards.admins import show_workers
+from bot.database.models import Application, Worker, ApplicationWorkerAssociation
+from bot.config import config
 
 status_symbol_mapping = {
     "Up": "⚙️",
@@ -16,9 +16,9 @@ status_symbol_mapping = {
     "Canceled": "❌"
 }
 
-router = Router()
+admin_router = Router()
 
-@router.message(Command("day_report"), ChatTypeFilter(chat_type=["private"]))
+@admin_router.message(Command("day_report"), ChatTypeFilter(chat_type=["private"]))
 async def show_all_workers(message: Message, session: AsyncSession):
     worker_query = select(ApplicationWorkerAssociation.worker_id, ApplicationWorkerAssociation.status).join(Application).filter(
         and_(
@@ -44,7 +44,7 @@ async def show_all_workers(message: Message, session: AsyncSession):
         await message.answer(text=text, parse_mode='Markdown')
 
 
-@router.message(Command("worker_status"), ChatTypeFilter(chat_type=["private"]))
+@admin_router.message(Command("worker_status"), ChatTypeFilter(chat_type=["private"]))
 async def show_workers_list(message: Message, session: AsyncSession):
     workers_query = select(Worker)
 
@@ -58,7 +58,7 @@ async def show_workers_list(message: Message, session: AsyncSession):
         await message.answer("Додайте робітників в базу")
 
 
-@router.callback_query(Text(startswith="worker"))
+@admin_router.callback_query(Text(startswith="worker"))
 async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
     application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(and_(Worker.id == int(callback.data.split('_')[2]), Application.post_time >= date.today(), Application.post_time < date.today() + timedelta(days=1)))
     applications = (await session.execute(application_query)).all()

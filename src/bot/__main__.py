@@ -1,10 +1,12 @@
 import asyncio
 from aiogram import Bot, Dispatcher
-from config import config
-from commands import set_commands
-from handlers import user_router, worker_router, admin_router
+from bot.config import config
+from bot.commands.commands import set_commands
+from bot.handlers.users import user_router
+from bot.handlers.workers import worker_router
+from bot.handlers.admins import admin_router
 from aiogram.fsm.storage.memory import MemoryStorage
-from middlewares import DbSessionMiddleware
+from bot.middlewares.database import DbSessionMiddleware
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
