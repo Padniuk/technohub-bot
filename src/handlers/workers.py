@@ -71,8 +71,11 @@ async def show_all_applications(message: Message, state: FSMContext, session: As
     application_request = await session.execute(application_query)
     applications = [(application.address,application.id) for application in application_request.scalars()]
     
-    await message.answer("Виберіть замовлення:", reply_markup=show_applications(applications))
-    await state.set_state(CompleteStates.application_id)
+    if len(applications)>0:
+        await message.answer("Виберіть замовлення:", reply_markup=show_applications(applications))
+        await state.set_state(CompleteStates.application_id)
+    else:
+        await message.answer("Ви не маєте замовлень")
 
 
 @router.callback_query(Text(startswith="chose_application"), CompleteStates.application_id)
@@ -104,8 +107,6 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
                                                                                                    price=data['price'],
                                                                                                    act_name=f'{post[0].message_id}')
     
-    
-
     await session.execute(application_query)
     await session.commit()
     await message.answer("Заявку зачинено")
@@ -127,8 +128,11 @@ async def show_all_applications(message: Message, state: FSMContext, session: As
     application_request = await session.execute(application_query)
     applications = [(application.address,application.id) for application in application_request.scalars()]
     
-    await message.answer("Виберіть замовлення:", reply_markup=show_applications(applications))
-    await state.set_state(CancelStates.application_id)
+    if len(applications)>0:
+        await message.answer("Виберіть замовлення:", reply_markup=show_applications(applications))
+        await state.set_state(CancelStates.application_id)
+    else:
+        await message.answer("Ви не маєте замовлень")
 
 
 @router.callback_query(Text(startswith="chose_application"), CancelStates.application_id)

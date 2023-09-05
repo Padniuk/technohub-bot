@@ -52,7 +52,10 @@ async def show_workers_list(message: Message, session: AsyncSession):
 
     workers_data = [(worker.name,worker.id) for worker in workers.scalars()]
 
-    await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
+    if len(workers_data)>0:
+        await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
+    else:
+        await message.answer("Додайте робітників в базу")
 
 
 @router.callback_query(Text(startswith="worker"))
