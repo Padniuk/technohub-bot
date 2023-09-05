@@ -24,7 +24,7 @@ async def help(message: Message):
 
 
 @user_router.message(Command("post"), ChatTypeFilter(chat_type=["private"]))
-async def make_post(message: Message, state: FSMContext):
+async def make_post(message: Message):
     await message.answer("Оберіть спосіб подачі заявки", reply_markup=choose_form_type())
 
 @user_router.callback_query(Text(startswith="site_form"))
@@ -34,7 +34,7 @@ async def fill_site_form(callback: CallbackQuery):
 
 
 @user_router.callback_query(Text(startswith="telegram_answers"))
-async def fill_answers(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+async def fill_answers(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("Надавайте кожну відповідь одним повідомленням")
     await timeout(3)
     await callback.message.answer("Оберіть тип послуг:", reply_markup=choose_service_type())
@@ -42,7 +42,7 @@ async def fill_answers(callback: CallbackQuery, state: FSMContext, session: Asyn
 
 
 @user_router.callback_query(ApplicationCreatingStates.service_type)
-async def add_problem(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+async def add_problem(callback: CallbackQuery, state: FSMContext):
     await state.update_data(service_type=callback.data)
     await callback.message.answer("Опишіть суть проблеми одним повідомленням:")
     await state.set_state(ApplicationCreatingStates.problem)
