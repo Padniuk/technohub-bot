@@ -18,12 +18,39 @@ status_symbol_mapping = {
 
 admin_router = Router()
 
-@admin_router.message(Command("day_report"), ChatTypeFilter(chat_type=["private"]))
-async def show_all_workers(message: Message, session: AsyncSession):
+@admin_router.message(Command("plumbing_day_report"), ChatTypeFilter(chat_type=["private"]))
+async def show_all_plumbers(message: Message, session: AsyncSession):
     worker_query = select(ApplicationWorkerAssociation.worker_id, ApplicationWorkerAssociation.status).join(Application).filter(
         and_(
             Application.post_time >= date.today(),
-            Application.post_time < date.today() + timedelta(days=1)
+            Application.post_time < date.today() + timedelta(days=1),
+            Application.application_type == 'plumbing'
+        )
+    )
+
+    workers = (await session.execute(worker_query)).all()
+
+    worker_statuses = defaultdict(list)
+    for worker_id, application_status in workers:
+        worker = (await session.execute(select(Worker).where(Worker.id == worker_id))).scalar_one()
+        worker_name = worker.name
+        worker_statuses[worker_name].append(status_symbol_mapping.get(application_status, application_status))
+
+    text = ""
+    for worker_name, statuses in worker_statuses.items():
+        formatted_statuses = ' - '.join(statuses)
+        text += f"`{worker_name}`: {formatted_statuses}\n"
+    if len(text)>0:
+        text+="\n\n⚙️ - в роботі\n✔️ - виконано\n❌ - відмова"
+        await message.answer(text=text, parse_mode='Markdown')
+
+@admin_router.message(Command("electricity_day_report"), ChatTypeFilter(chat_type=["private"]))
+async def show_all_electricers(message: Message, session: AsyncSession):
+    worker_query = select(ApplicationWorkerAssociation.worker_id, ApplicationWorkerAssociation.status).join(Application).filter(
+        and_(
+            Application.post_time >= date.today(),
+            Application.post_time < date.today() + timedelta(days=1),
+            Application.application_type == 'electricity'
         )
     )
 
@@ -50,7 +77,7 @@ async def show_workers_list(message: Message, session: AsyncSession):
 
     workers = (await session.execute(workers_query))
 
-    workers_data = [(worker.name,worker.id) for worker in workers.scalars()]
+    workers_data = [(worker.name,worker.id, worker.worker_type) for worker in workers.scalars()]
 
     if len(workers_data)>0:
         await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
@@ -72,8 +99,46 @@ async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
             elif status == 'Canceled':
                 text+=f'\tВімовився з наступної причини:\n\t\t{comment}\n'
             else:
-                text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_name})\n'
+                text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_id})\n'
         await callback.message.answer(text=text, parse_mode='Markdown')
     else:
         text+='\tРобіт не виконував\n'
         await callback.message.answer(text=text, parse_mode='Markdown')
+
+
+@admin_router.message(Command("free_applications"))
+async def show_free_list(message: Message, session: AsyncSession):
+    subquery = select(ApplicationWorkerAssociation.application_id).distinct()
+
+    free_application_query = select(Application.name, Application.address, Application.phone, Application.problem).where(
+        and_(
+            ~Application.id.in_(subquery),
+            Application.post_time >= date.today(), 
+            Application.post_time < date.today() + timedelta(days=1)
+        )
+    )
+
+    canceled_application_query = select(Application.name, Application.address, Application.phone, Application.problem).join(
+        ApplicationWorkerAssociation,
+        and_(
+            Application.id == ApplicationWorkerAssociation.application_id,
+            ApplicationWorkerAssociation.status == 'Canceled'
+        )
+    ).where(
+        and_(
+            Application.post_time >= date.today(),
+            Application.post_time < date.today() + timedelta(days=1)
+        )
+    )
+
+    combined_query = free_application_query.union(canceled_application_query)
+
+    applications = (await session.execute(combined_query)).all()
+    
+    if len(applications)>0:
+        text=''
+        for application in applications:
+            text+=f'`{application.address}` - {application.name}, `{application.phone}`\n{application.problem}\n\n'
+        await message.answer(text=text, parse_mode='Markdown')
+    else:
+        await message.answer("Немає вільних заявок", parse_mode='Markdown')

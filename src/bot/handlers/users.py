@@ -5,16 +5,17 @@ from bot.states.states import ApplicationCreatingStates
 from aiogram.fsm.context import FSMContext
 from asyncio import sleep as timeout
 from bot.config import config
+from aiogram.methods.set_my_commands import SetMyCommands
+from aiogram.types import BotCommand, BotCommandScopeChat
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.methods.send_message import SendMessage
 from aiogram.methods.edit_message_text import EditMessageText
 from bot.keyboards.users import take_application, choose_service_type, choose_form_type, open_webapp
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from bot.database.models import Application, Worker, ApplicationWorkerAssociation
 from bot.filters.chats import ChatTypeFilter
 from bot.filters.phone import PhoneFilter
 from sqlalchemy.orm import exc
-from aiogram.exceptions import AiogramError
 
 user_router = Router()    
 
@@ -115,16 +116,30 @@ async def show_contacts(callback: CallbackQuery, session: AsyncSession):
 
         application = (await session.execute(application_select)).scalar_one()
         
-
-        association = ApplicationWorkerAssociation(
-            application_id=application.id,
-            worker_id=worker.id,
-            status="Up",
-            comment=""
+        existance_query=select(ApplicationWorkerAssociation.status).where(
+            (ApplicationWorkerAssociation.worker_id == worker.id) &
+            (ApplicationWorkerAssociation.application_id == application.id)
         )
+        
+        existing_status = (await session.execute(existance_query)).all()
 
-        session.add(association)
-        await session.commit()
+        if len(existing_status)>0:
+            association_query = update(ApplicationWorkerAssociation).where(
+                (ApplicationWorkerAssociation.worker_id == worker.id) &
+                (ApplicationWorkerAssociation.application_id == application.id)
+            ).values(status='Up')
+            await session.execute(association_query)
+            await session.commit()
+        else:
+            association = ApplicationWorkerAssociation(
+                application_id=application.id,
+                worker_id=worker.id,
+                status="Up",
+                comment=""
+            )
+
+            session.add(association)
+            await session.commit()
 
         text = f"Ви взяли замовлення:\n\n{application.problem}\n\nЗамовник: {application.name}\nКонтакти: `{application.phone}`\nАдреса: `{application.address}`"
 
@@ -137,10 +152,12 @@ async def show_contacts(callback: CallbackQuery, session: AsyncSession):
             reply_markup=None,
             parse_mode="Markdown",
         )
-
     except exc.NoResultFound:
-        await callback.message.answer('Ви не є виконавцем, щоб зареєструватись використайте команду:\n`/registration`', parse_mode='Markdown')
-    except AiogramError:
-        await callback.message.answer(f"Необхідно розпочати [розмову]({config.invite_link}) з ботом", parse_mode='Markdown')
+        text=f'{callback.from_user.first_name}, Ви не є виконавцем. Щоб зареєструватись використайте команду:\n`/registration` в [бесіді]({config.invite_link}) з ботом'
+        await callback.message.answer(text=text, parse_mode='Markdown')
+        registration_commands = [
+            BotCommand(command="registration", description="Registrate as worker")
+        ]
+        await SetMyCommands(commands=registration_commands, scope=BotCommandScopeChat(chat_id=callback.from_user.id))
     
     

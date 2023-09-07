@@ -5,7 +5,6 @@ from bot.config import config
 async def set_commands(bot: Bot):
     await user_commands(bot)
     await admin_commands(bot)
-    await group_commands(bot)
 
 
 async def user_commands(bot: Bot):
@@ -19,26 +18,12 @@ async def user_commands(bot: Bot):
         scope=BotCommandScopeAllPrivateChats()
     )
 
-
-async def group_commands(bot: Bot):
-    group_commands = [
-        BotCommand(command="registration", description="Registrate as worker")
-    ]
-    
-    await bot.set_my_commands(
-        group_commands, 
-        scope=BotCommandScopeChat(chat_id=config.electricity_chat_id)
-    )
-    await bot.set_my_commands(
-        group_commands, 
-        scope=BotCommandScopeChat(chat_id=config.plumbing_chat_id)
-    )
-
-
 async def admin_commands(bot: Bot):
     admin_commands = [
         BotCommand(command="worker_status", description="Incividual worker statistics"),
-        BotCommand(command="day_report", description="All worker statistics")
+        BotCommand(command="plumbing_day_report", description="Plumbing statistics"),
+        BotCommand(command="electricity_day_report", description="Electricity statistics"),
+        BotCommand(command="free_applications", description="Info about free applications")
     ]
     for admin_id in config.admins_id.split(', '):
         await bot.set_my_commands(

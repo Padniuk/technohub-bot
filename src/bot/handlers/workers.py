@@ -13,6 +13,8 @@ from aiogram.types.input_media_photo import InputMediaPhoto
 from aiogram.types.input_media_document import InputMediaDocument
 from sqlalchemy import insert, select, update, and_
 from bot.filters.phone import PhoneFilter
+from bot.filters.price import PriceFilter
+from bot.filters.chats import ChatTypeFilter
 from bot.config import config
 from bot.keyboards.workers import show_applications
 from bot.keyboards.users import take_application
@@ -40,8 +42,10 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await state.clear()
     user_id = message.from_user.id
 
+    worker_type = 'electricity' if message.chat.id == config.electricity_chat_id else 'plumbing'
+
     worker_query = insert(Worker).values(
-        worker_type='electricity',
+        worker_type=worker_type,
         name=data["name"],
         user_id=str(user_id),
         phone=data["phone"]
@@ -56,8 +60,7 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await session.commit()
     
     await SetMyCommands(commands=worker_commands, scope=BotCommandScopeChat(chat_id=user_id))
-    await message.answer("Робітник доданий в базу")
-    await message.answer(f'Для можливості брати заявки почність [спілкування]({config.invite_link}) з ботом', parse_mode='Markdown')
+    await message.answer("Ви додані в базу робітників, тепер Ви маєте змогу брати заявки")
 
 
 @worker_router.message(Command("complete"))
@@ -86,7 +89,7 @@ async def chose_application(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CompleteStates.price)
 
 
-@worker_router.message(CompleteStates.price)
+@worker_router.message(CompleteStates.price, PriceFilter())
 async def get_price(message: Message, state: FSMContext):
     await state.update_data(price=int(message.text))
     await message.answer("Надайте акт виконаних робіт:")
@@ -106,7 +109,7 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
     await session.execute(application_query)
     application_query = update(Application).where(Application.id == data['application_id']).values(complete_time=message.date.replace(tzinfo=None), 
                                                                                                    price=data['price'],
-                                                                                                   act_id=f'{post[0].message_id}')
+                                                                                                   act_id=int(post[0].message_id))
     
     await session.execute(application_query)
     await session.commit()
@@ -126,7 +129,7 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
     await session.execute(application_query)
     application_query = update(Application).where(Application.id == data['application_id']).values(complete_time=message.date.replace(tzinfo=None), 
                                                                                                    price=data['price'],
-                                                                                                   act_id=f'{post[0].message_id}')
+                                                                                                   act_id=int(post[0].message_id))
     
     await session.execute(application_query)
     await session.commit()
@@ -163,7 +166,7 @@ async def chose_application(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CancelStates.comment)
 
 
-@worker_router.message(CancelStates.comment)
+@worker_router.message(CancelStates.comment, F.text)
 async def cancel_application(message: Message, state: FSMContext, session: AsyncSession): 
     await state.update_data(comment=message.text)
     data = await state.get_data()
