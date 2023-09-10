@@ -15,6 +15,9 @@ from sqlalchemy import insert, select, update, and_
 from bot.filters.phone import PhoneFilter
 from bot.filters.price import PriceFilter
 from bot.filters.chats import ChatTypeFilter
+from bot.filters.registration import RegistrationFilter
+from bot.filters.worker import WorkerFilter
+from bot.filters.worker import WorkerFilter
 from bot.config import config
 from bot.keyboards.workers import show_applications
 from bot.keyboards.users import take_application
@@ -22,7 +25,7 @@ from bot.keyboards.users import take_application
 worker_router = Router()
 
 
-@worker_router.message(Command("registration"))
+@worker_router.message(Command("registration"), ChatTypeFilter(chat_type=["private"]), RegistrationFilter(), ~WorkerFilter())
 async def add_worker(message: Message, state: FSMContext):
     await message.answer("Введіть ім'я:")
     await state.set_state(WorkerStates.name)
@@ -63,7 +66,7 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await message.answer("Ви додані в базу робітників, тепер Ви маєте змогу брати заявки")
 
 
-@worker_router.message(Command("complete"))
+@worker_router.message(Command("complete"), ChatTypeFilter(chat_type=["private"]), WorkerFilter())
 async def show_all_applications(message: Message, state: FSMContext, session: AsyncSession):
     application_query = (
         select(Application)
@@ -140,7 +143,7 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
 async def send_photo_error(message: Message, state: FSMContext):
     await message.answer('Акт виконаних робіт це фото')
 
-@worker_router.message(Command("cancel"))
+@worker_router.message(Command("cancel"), ChatTypeFilter(chat_type=["private"]), WorkerFilter())
 async def show_all_applications(message: Message, state: FSMContext, session: AsyncSession):
     application_query = (
         select(Application)
