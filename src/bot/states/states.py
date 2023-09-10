@@ -9,6 +9,7 @@ class ApplicationCreatingStates(StatesGroup):
     address = State()
 
 class WorkerStates(StatesGroup):
+    service_type = State()
     name = State()
     phone = State()
 

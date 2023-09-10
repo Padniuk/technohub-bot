@@ -19,6 +19,7 @@ from bot.filters.registration import RegistrationFilter
 from bot.filters.worker import WorkerFilter
 from bot.filters.worker import WorkerFilter
 from bot.config import config
+from bot.keyboards.users import choose_service_type
 from bot.keyboards.workers import show_applications
 from bot.keyboards.users import take_application
 
@@ -27,12 +28,17 @@ worker_router = Router()
 
 @worker_router.message(Command("registration"), ChatTypeFilter(chat_type=["private"]), RegistrationFilter(), ~WorkerFilter())
 async def add_worker(message: Message, state: FSMContext):
-    await message.answer("Введіть ім'я:")
+    await message.answer("Вкажіть тип сервісу:", reply_markup=choose_service_type())
+    await state.set_state(WorkerStates.service_type)
+
+@worker_router.callback_query(WorkerStates.service_type)
+async def add_worker_service_type(message: Message, state: FSMContext):
+    await state.update_data(service_type=callback.data)
+    await callback.message.answer("Введіть ім'я:")
     await state.set_state(WorkerStates.name)
 
-
 @worker_router.message(WorkerStates.name, F.text)
-async def add_worker_name(message: Message, state: FSMContext):
+async def add_worker_phone(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
     await message.answer("Введіть телефон:")
     await state.set_state(WorkerStates.phone)
@@ -45,10 +51,9 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     await state.clear()
     user_id = message.from_user.id
 
-    worker_type = 'electricity' if message.chat.id == config.electricity_chat_id else 'plumbing'
 
     worker_query = insert(Worker).values(
-        worker_type=worker_type,
+        worker_type=data["service_type"],
         name=data["name"],
         user_id=str(user_id),
         phone=data["phone"]
