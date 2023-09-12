@@ -32,7 +32,7 @@ async def add_worker(message: Message, state: FSMContext):
     await state.set_state(WorkerStates.service_type)
 
 @worker_router.callback_query(WorkerStates.service_type)
-async def add_worker_service_type(message: Message, state: FSMContext):
+async def add_worker_service_type(callback: CallbackQuery, state: FSMContext):
     await state.update_data(service_type=callback.data)
     await callback.message.answer("Введіть ім'я:")
     await state.set_state(WorkerStates.name)

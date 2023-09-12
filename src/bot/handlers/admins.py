@@ -90,7 +90,7 @@ async def show_workers_list(message: Message, session: AsyncSession):
         await message.answer("Додайте робітників в базу")
 
 
-@admin_router.callback_query(Text(startswith="worker"), ChatTypeFilter(chat_type=["private"]), AdminFilter())
+@admin_router.callback_query(Text(startswith="worker"))
 async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
     application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(and_(Worker.id == int(callback.data.split('_')[2]), Application.post_time >= date.today(), Application.post_time < date.today() + timedelta(days=1)))
     applications = (await session.execute(application_query)).all()
