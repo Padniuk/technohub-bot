@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -32,6 +32,7 @@ class Worker(Base):
     name = Column(String(255))
     phone = Column(String(20))
     user_id = Column(String(50))
+    blocked = Column(Boolean, default=False)
     additional_info = Column(Text)
 
     applications = relationship('Application', secondary='main_applicationworkerassociation', back_populates='workers')

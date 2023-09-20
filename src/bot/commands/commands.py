@@ -32,6 +32,9 @@ async def work_chat_commands(bot: Bot):
 
 async def admin_commands(bot: Bot):
     admin_commands = [
+        BotCommand(command="post", description="Створити пост"),
+        BotCommand(command="ban", description= "Заблокувати робітника"),
+        BotCommand(command="unban", description="Розблокувати робітника"),
         BotCommand(command="worker_status", description="Індивідуальна статистика"),
         BotCommand(command="plumbing_day_report", description="Статистика сантехніків"),
         BotCommand(command="electricity_day_report", description="Статистика електриків"),

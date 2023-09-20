@@ -60,8 +60,8 @@ async def save_data(message: Message, state: FSMContext, session: AsyncSession):
     )
 
     worker_commands = [
-        BotCommand(command="cancel", description="Cancel an application"),
-        BotCommand(command="complete", description="Complete an application")
+        BotCommand(command="cancel", description="Скасувати замовлення"),
+        BotCommand(command="complete", description="Завершити замовлення")
     ]
 
     await session.execute(worker_query)
@@ -103,6 +103,9 @@ async def get_price(message: Message, state: FSMContext):
     await message.answer("Надайте акт виконаних робіт:")
     await state.set_state(CompleteStates.report)
 
+@worker_router.message(CompleteStates.price, ~PriceFilter())
+async def get_wrong_price(message: Message, state: FSMContext):
+    await message.answer("Ціна має бути вказана числом")
 
 @worker_router.message(CompleteStates.report, F.photo)
 async def chose_application(message: Message, state: FSMContext, session: AsyncSession):

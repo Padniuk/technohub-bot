@@ -1,8 +1,8 @@
 from aiogram import Router
-from aiogram.filters import Command, Text
+from aiogram.filters import Command, Text, or_f
 from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 from datetime import timedelta, date
 from collections import defaultdict
 from bot.filters.chats import ChatTypeFilter
@@ -75,42 +75,6 @@ async def show_all_electricers(message: Message, session: AsyncSession):
     else:
         await message.answer(text="Замовлень по електриці немає", parse_mode='Markdown')
 
-
-@admin_router.message(Command("worker_status"), ChatTypeFilter(chat_type=["private"]), AdminFilter())
-async def show_workers_list(message: Message, session: AsyncSession):
-    workers_query = select(Worker)
-
-    workers = (await session.execute(workers_query))
-
-    workers_data = [(worker.name,worker.id, worker.worker_type) for worker in workers.scalars()]
-
-    if len(workers_data)>0:
-        await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
-    else:
-        await message.answer("Додайте робітників в базу")
-
-
-@admin_router.callback_query(Text(startswith="worker"))
-async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
-    application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(and_(Worker.id == int(callback.data.split('_')[2]), Application.post_time >= date.today(), Application.post_time < date.today() + timedelta(days=1)))
-    applications = (await session.execute(application_query)).all()
-
-    text = f'{callback.data.split("_")[1]} звіт:\n\n'
-    if len(applications)>0:
-        for application, status, comment in applications:
-            text+=f'{application.address}:\n'
-            if status == 'Up':
-                text+=f'\tВ роботі\n'
-            elif status == 'Canceled':
-                text+=f'\tВімовився з наступної причини:\n\t\t{comment}\n'
-            else:
-                text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_id})\n'
-        await callback.message.answer(text=text, parse_mode='Markdown')
-    else:
-        text+='\tРобіт не виконував\n'
-        await callback.message.answer(text=text, parse_mode='Markdown')
-
-
 @admin_router.message(Command("free_applications"), ChatTypeFilter(chat_type=["private"]), AdminFilter())
 async def show_free_list(message: Message, session: AsyncSession):
     subquery = select(ApplicationWorkerAssociation.application_id).distinct()
@@ -147,3 +111,62 @@ async def show_free_list(message: Message, session: AsyncSession):
         await message.answer(text=text, parse_mode='Markdown')
     else:
         await message.answer("Немає вільних заявок", parse_mode='Markdown')
+
+
+@admin_router.message(Command("worker_status"), ChatTypeFilter(chat_type=["private"]), AdminFilter())
+async def show_workers_list(message: Message, session: AsyncSession):
+    workers_query = select(Worker)
+
+    workers = (await session.execute(workers_query))
+
+    workers_data = [(worker.name,worker.id, worker.worker_type) for worker in workers.scalars()]
+
+    if len(workers_data)>0:
+        await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data))
+    else:
+        await message.answer("Додайте робітників в базу")
+
+@admin_router.message(or_f(Command("ban"), Command("unban")), ChatTypeFilter(chat_type=["private"]), AdminFilter())
+async def show_unbanned_users(message: Message, session: AsyncSession):
+    blocked = False if message.text == '/ban' else True
+    workers_query = select(Worker).where(Worker.blocked==blocked)
+
+    workers = (await session.execute(workers_query))
+
+    workers_data = [(worker.name,worker.id, worker.worker_type) for worker in workers.scalars()]
+
+    if len(workers_data)>0:
+        await message.answer("Виберіть робітника:", reply_markup=show_workers(workers_data, lock=True))
+    else:
+        if blocked:
+            await message.answer("Ви не маєте робітників, або всі вони розблоковані")
+        else:
+            await message.answer("Ви не маєте робітників, або всі вони заблоковані")
+
+
+@admin_router.callback_query(Text(startswith="worker"))
+async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
+    application_query = select(Application, ApplicationWorkerAssociation.status, ApplicationWorkerAssociation.comment).join(ApplicationWorkerAssociation).join(Worker, Worker.id == ApplicationWorkerAssociation.worker_id).filter(and_(Worker.id == int(callback.data.split('_')[2]), Application.post_time >= date.today(), Application.post_time < date.today() + timedelta(days=1)))
+    applications = (await session.execute(application_query)).all()
+
+    text = f'{callback.data.split("_")[1]} звіт:\n\n'
+    if len(applications)>0:
+        for application, status, comment in applications:
+            text+=f'{application.id} - {application.address}, {application.name}, `{application.phone}`:\n'
+            if status == 'Up':
+                text+=f'\tВ роботі\n'
+            elif status == 'Canceled':
+                text+=f'\tВімовився з наступної причини:\n\t\t{comment}\n'
+            else:
+                text+=f'\tЗавершенo, [Посилання](https://t.me/c/{str(config.channel_id)[4:]}/{application.act_id})\n'
+        await callback.message.answer(text=text, parse_mode='Markdown')
+    else:
+        text+='\tРобіт не виконував\n'
+        await callback.message.answer(text=text, parse_mode='Markdown')
+
+@admin_router.callback_query(Text(startswith="blocked-worker"))
+async def lock_worker(callback: CallbackQuery, session: AsyncSession):
+    workers_query = update(Worker).where(Worker.id == int(callback.data.split('_')[2])).values(blocked=~Worker.blocked)
+    await session.execute(workers_query)
+    await session.commit()
+    await callback.message.answer(text='Стан робітника змінено на протилежний', parse_mode='Markdown')
