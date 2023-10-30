@@ -8,14 +8,17 @@ class ApplicationCreatingStates(StatesGroup):
     contacts = State()
     address = State()
 
+
 class WorkerStates(StatesGroup):
     service_type = State()
     name = State()
     phone = State()
 
+
 class CancelStates(StatesGroup):
     application_id = State()
     comment = State()
+
 
 class CompleteStates(StatesGroup):
     application_id = State()

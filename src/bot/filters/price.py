@@ -8,6 +8,6 @@ class PriceFilter(BaseFilter):
         if price.isdigit():
             return True
         else:
-            text = 'Сума має бути вказана числом'
-            await message.answer(text, parse_mode='Markdown')
+            text = "Сума має бути вказана числом"
+            await message.answer(text, parse_mode="Markdown")
             return False

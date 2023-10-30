@@ -6,8 +6,9 @@ from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
+
 class Application(Base):
-    __tablename__ = 'main_application'
+    __tablename__ = "main_application"
 
     id = Column(Integer, primary_key=True)
     application_type = Column(String(30))
@@ -16,16 +17,21 @@ class Application(Base):
     problem = Column(Text)
     address = Column(String(50))
     post_time = Column(DateTime, default=func.now())
+    take_time = Column(DateTime, nullable=True)
     complete_time = Column(DateTime, nullable=True)
     message_id = Column(String(50))
     price = Column(Integer, default=0)
     act_id = Column(Integer, default=0)
 
-    workers = relationship('Worker', secondary='main_applicationworkerassociation', back_populates='applications')#, lazy='dynamic'
+    workers = relationship(
+        "Worker",
+        secondary="main_applicationworkerassociation",
+        back_populates="applications",
+    )  # , lazy='dynamic'
 
 
 class Worker(Base):
-    __tablename__ = 'main_worker'
+    __tablename__ = "main_worker"
 
     id = Column(Integer, primary_key=True)
     worker_type = Column(String(30))
@@ -35,15 +41,19 @@ class Worker(Base):
     blocked = Column(Boolean, default=False)
     additional_info = Column(Text)
 
-    applications = relationship('Application', secondary='main_applicationworkerassociation', back_populates='workers')
-
-
+    applications = relationship(
+        "Application",
+        secondary="main_applicationworkerassociation",
+        back_populates="workers",
+    )
 
 
 class ApplicationWorkerAssociation(Base):
-    __tablename__ = 'main_applicationworkerassociation'
+    __tablename__ = "main_applicationworkerassociation"
 
-    application_id = Column(Integer, ForeignKey('main_application.id'), primary_key=True)
-    worker_id = Column(Integer, ForeignKey('main_worker.id'), primary_key=True)
+    application_id = Column(
+        Integer, ForeignKey("main_application.id"), primary_key=True
+    )
+    worker_id = Column(Integer, ForeignKey("main_worker.id"), primary_key=True)
     status = Column(String(50))
     comment = Column(String(255))
