@@ -23,7 +23,7 @@ def make_report_navigation(application_type, application_status, offset=0):
         InlineKeyboardButton(
             text="<", callback_data=f"report_{application_type}_left_{offset+1}_{application_status}"
         ),
-        InlineKeyboardButton(text="Закрити", callback_data="close_report"),
+        InlineKeyboardButton(text="Закрити", callback_data="remove_message"),
         InlineKeyboardButton(
             text=">", callback_data=f"report_{application_type}_right_{offset-1}_{application_status}"
         ),
