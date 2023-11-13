@@ -41,7 +41,9 @@ async def admin_commands(bot: Bot):
         BotCommand(command="worker_status", description="Індивідуальна статистика"),
         BotCommand(command="plumbing_report", description="Статистика сантехніків"),
         BotCommand(command="electricity_report", description="Статистика електриків"),
-        BotCommand(command="free_applications", description="Активні та скасовані заявки"),
+        BotCommand(
+            command="free_applications", description="Активні та скасовані заявки"
+        ),
         BotCommand(command="close_application", description="Видалити заявку"),
     ]
     for admin_id in config.admins_id.split(", "):

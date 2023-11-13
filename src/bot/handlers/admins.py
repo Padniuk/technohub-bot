@@ -2,6 +2,8 @@ from aiogram import Router
 from aiogram.filters import Command, Text, or_f
 from aiogram.types import Message, CallbackQuery
 from aiogram.methods.delete_message import DeleteMessage
+from aiogram.types.chat_member_member import ChatMemberStatus
+from aiogram.methods.get_chat_member import GetChatMember
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, not_, update, delete, union, desc
 from datetime import timedelta, date
@@ -14,7 +16,7 @@ from bot.keyboards.admins import (
     make_worker_data_navigation,
     make_categories,
     close_free_applications,
-    make_application_list
+    make_application_list,
 )
 from bot.database.models import Application, Worker, ApplicationWorkerAssociation
 from bot.config import config
@@ -28,18 +30,24 @@ admin_router = Router()
     Command("free_applications"), ChatTypeFilter(chat_type=["private"]), AdminFilter()
 )
 async def show_free_applications(message: Message, session: AsyncSession):
-    await DeleteMessage(
-        chat_id=message.chat.id, message_id=message.message_id
-    )
-    subquery = select(ApplicationWorkerAssociation.application_id).distinct().where(
-        or_(
-            ApplicationWorkerAssociation.status == "Up",
-            ApplicationWorkerAssociation.status == "Ready",
+    await DeleteMessage(chat_id=message.chat.id, message_id=message.message_id)
+    subquery = (
+        select(ApplicationWorkerAssociation.application_id)
+        .distinct()
+        .where(
+            or_(
+                ApplicationWorkerAssociation.status == "Up",
+                ApplicationWorkerAssociation.status == "Ready",
+            )
         )
     )
 
     canceled_application_query = select(
-        Application.id, Application.name, Application.address, Application.phone, Application.problem
+        Application.id,
+        Application.name,
+        Application.address,
+        Application.phone,
+        Application.problem,
     ).join(
         ApplicationWorkerAssociation,
         and_(
@@ -50,7 +58,11 @@ async def show_free_applications(message: Message, session: AsyncSession):
     )
 
     free_application_query = select(
-        Application.id, Application.name, Application.address, Application.phone, Application.problem
+        Application.id,
+        Application.name,
+        Application.address,
+        Application.phone,
+        Application.problem,
     ).where(~Application.id.in_(subquery))
 
     combined_query = free_application_query.union(canceled_application_query)
@@ -61,7 +73,9 @@ async def show_free_applications(message: Message, session: AsyncSession):
         text = ""
         for application in applications:
             text += f"Заявка - {application.id}:\n🏠 {application.address}\n📞 `{application.phone}`, {application.name}:\n{application.problem}\n\n"
-        await message.answer(text=text, reply_markup=close_free_applications(), parse_mode="Markdown")
+        await message.answer(
+            text=text, reply_markup=close_free_applications(), parse_mode="Markdown"
+        )
     else:
         await message.answer("Немає вільних заявок", parse_mode="Markdown")
 
@@ -70,18 +84,30 @@ async def show_free_applications(message: Message, session: AsyncSession):
     Command("worker_status"), ChatTypeFilter(chat_type=["private"]), AdminFilter()
 )
 async def show_workers_list(message: Message, session: AsyncSession):
-    await DeleteMessage(
-        chat_id=message.chat.id, message_id=message.message_id
-    )
+    await DeleteMessage(chat_id=message.chat.id, message_id=message.message_id)
     workers_query = select(Worker)
 
     workers = await session.execute(workers_query)
 
-    workers_data = [
-        (worker.name, worker.id, worker.worker_type, worker.phone) for worker in workers.scalars()
-    ]
+    workers_data = {"active": [], "removed": []}
 
-    if len(workers_data) > 0:
+    for worker in workers.scalars():
+        chat_member = await GetChatMember(
+            chat_id=config.plumbing_chat_id
+            if worker.worker_type == "plumbing"
+            else config.electricity_chat_id,
+            user_id=int(worker.user_id),
+        )
+        if chat_member.status == ChatMemberStatus.MEMBER:
+            workers_data["active"].append(
+                (worker.name, worker.id, worker.worker_type, worker.phone)
+            )
+        else:
+            workers_data["removed"].append(
+                (worker.name, worker.id, worker.worker_type, worker.phone)
+            )    
+
+    if len(workers_data["active"])+len(workers_data["removed"]) > 0:
         await message.answer(
             "Виберіть робітника:", reply_markup=show_workers(workers_data)
         )
@@ -100,11 +126,21 @@ async def show_unbanned_users(message: Message, session: AsyncSession):
 
     workers = await session.execute(workers_query)
 
-    workers_data = [
-        (worker.name, worker.id, worker.worker_type) for worker in workers.scalars()
-    ]
+    workers_data = {"active": [], "removed": []}
 
-    if len(workers_data) > 0:
+    for worker in workers.scalars():
+        chat_member = await GetChatMember(
+            chat_id=config.plumbing_chat_id
+            if worker.worker_type == "plumbing"
+            else config.electricity_chat_id,
+            user_id=int(worker.user_id),
+        )
+        if chat_member.status == ChatMemberStatus.MEMBER:
+            workers_data["active"].append(
+                (worker.name, worker.id, worker.worker_type, worker.phone)
+            )
+
+    if len(workers_data["active"]) > 0:
         await message.answer(
             "Виберіть робітника:", reply_markup=show_workers(workers_data, lock=True)
         )
@@ -119,8 +155,8 @@ async def show_unbanned_users(message: Message, session: AsyncSession):
 async def show_worker_offset_report(callback: CallbackQuery, session: AsyncSession):
     offset = int(callback.data.split("_")[3])
     worker_id = int(callback.data.split("_")[2])
-    worker_name = callback.message.text.split(' ')[1].strip()
-    worker_phone = callback.message.text.split(' ')[3].strip()
+    worker_name = callback.message.text.split(" ")[1].strip()
+    worker_phone = callback.message.text.split(" ")[3].strip()
     if offset >= 0:
         application_query = (
             select(
@@ -137,7 +173,7 @@ async def show_worker_offset_report(callback: CallbackQuery, session: AsyncSessi
         )
         applications = (await session.execute(application_query)).all()
 
-        text = f'👷 {worker_name} - `{worker_phone}` звіт:\n\n'
+        text = f"👷 {worker_name} - `{worker_phone}` звіт:\n\n"
         if len(applications) > 0:
             for application, status, comment in applications:
                 text += f"Заявка - {application.id}:\n🏠 {application.address}\n📞 `{application.phone}`, {application.name}:\n"
@@ -182,7 +218,9 @@ async def show_worker_report(callback: CallbackQuery, session: AsyncSession):
     )
     applications = (await session.execute(application_query)).all()
 
-    text = f'👷 {callback.data.split("_")[1]} - `{callback.data.split("_")[3]}` звіт:\n\n'
+    text = (
+        f'👷 {callback.data.split("_")[1]} - `{callback.data.split("_")[3]}` звіт:\n\n'
+    )
     if len(applications) > 0:
         for application, status, comment in applications:
             text += f"Заявка - {application.id}:\n🏠 {application.address}\n📞 `{application.phone}`, {application.name}:\n"
@@ -223,11 +261,13 @@ async def lock_worker(callback: CallbackQuery, session: AsyncSession):
     AdminFilter(),
 )
 async def show_categories(message: Message):
-    await DeleteMessage(
-        chat_id=message.chat.id, message_id=message.message_id
-    )
+    await DeleteMessage(chat_id=message.chat.id, message_id=message.message_id)
     application_type = message.text.split("_")[0][1:]
-    await message.answer(text="Оберіть тип замовлень:", reply_markup=make_categories(application_type), parse_mode="Markdown")
+    await message.answer(
+        text="Оберіть тип замовлень:",
+        reply_markup=make_categories(application_type),
+        parse_mode="Markdown",
+    )
 
 
 @admin_router.callback_query(Text(startswith="category"))
@@ -252,7 +292,12 @@ async def show_report(callback: CallbackQuery, session: AsyncSession):
             .select_from(
                 application_table.join(ApplicationWorkerAssociation).join(worker_table)
             )
-            .filter(and_(Application.application_type == application_type, ApplicationWorkerAssociation.status == application_status))
+            .filter(
+                and_(
+                    Application.application_type == application_type,
+                    ApplicationWorkerAssociation.status == application_status,
+                )
+            )
         )
         .order_by(desc(Application.take_time))
         .limit(5)
@@ -311,7 +356,12 @@ async def show_offset_report(callback: CallbackQuery, session: AsyncSession):
                         worker_table
                     )
                 )
-                .filter(and_(Application.application_type == application_type, ApplicationWorkerAssociation.status == application_status))
+                .filter(
+                    and_(
+                        Application.application_type == application_type,
+                        ApplicationWorkerAssociation.status == application_status,
+                    )
+                )
             )
             .order_by(desc(Application.take_time))
             .limit(5)
@@ -338,7 +388,9 @@ async def show_offset_report(callback: CallbackQuery, session: AsyncSession):
             await callback.message.answer(
                 text,
                 parse_mode="Markdown",
-                reply_markup=make_report_navigation(application_type, application_status, offset),
+                reply_markup=make_report_navigation(
+                    application_type, application_status, offset
+                ),
             )
         else:
             await callback.answer(text="Нема старіших заявок")
@@ -359,13 +411,15 @@ async def close_report(callback: CallbackQuery):
     AdminFilter(),
 )
 async def show_free_list(message: Message, session: AsyncSession):
-    await DeleteMessage(
-        chat_id=message.chat.id, message_id=message.message_id
-    )
-    subquery = select(ApplicationWorkerAssociation.application_id).distinct().where(
-        or_(
-            ApplicationWorkerAssociation.status == "Up",
-            ApplicationWorkerAssociation.status == "Ready",
+    await DeleteMessage(chat_id=message.chat.id, message_id=message.message_id)
+    subquery = (
+        select(ApplicationWorkerAssociation.application_id)
+        .distinct()
+        .where(
+            or_(
+                ApplicationWorkerAssociation.status == "Up",
+                ApplicationWorkerAssociation.status == "Ready",
+            )
         )
     )
 
@@ -387,8 +441,18 @@ async def show_free_list(message: Message, session: AsyncSession):
     combined_query = free_application_query.union(canceled_application_query)
 
     applications = (await session.execute(combined_query)).all()
-    applications_data = [{"id": application.id, "address": application.address, "application_type": application.application_type} for application in applications]
-    await message.answer(text="Виберіть заявку:", reply_markup=make_application_list(applications_data))
+    applications_data = [
+        {
+            "id": application.id,
+            "address": application.address,
+            "application_type": application.application_type,
+        }
+        for application in applications
+    ]
+    await message.answer(
+        text="Виберіть заявку:", reply_markup=make_application_list(applications_data)
+    )
+
 
 @admin_router.callback_query(Text(startswith="close_application"))
 async def close_application(callback: CallbackQuery, session: AsyncSession):
@@ -398,7 +462,7 @@ async def close_application(callback: CallbackQuery, session: AsyncSession):
     application_id = int(callback.data.split("_")[2])
     application_type = callback.data.split("_")[3]
 
-    application_query = select(Application).where(Application.id==application_id)
+    application_query = select(Application).where(Application.id == application_id)
     application = (await session.execute(application_query)).scalar_one()
 
     existance_query = select(ApplicationWorkerAssociation.status).where(
@@ -408,15 +472,17 @@ async def close_application(callback: CallbackQuery, session: AsyncSession):
     existing_status = (await session.execute(existance_query)).all()
 
     await DeleteMessage(
-        chat_id=config.plumbing_chat_id if application_type == 'plumbing' else config.electricity_chat_id,
-        message_id=int(application.message_id)
+        chat_id=config.plumbing_chat_id
+        if application_type == "plumbing"
+        else config.electricity_chat_id,
+        message_id=int(application.message_id),
     )
 
     if len(existing_status) > 0:
         association_query = delete(ApplicationWorkerAssociation).where(
             and_(
                 ApplicationWorkerAssociation.application_id == application_id,
-                ApplicationWorkerAssociation.status == "Canceled"
+                ApplicationWorkerAssociation.status == "Canceled",
             )
         )
         await session.execute(association_query)

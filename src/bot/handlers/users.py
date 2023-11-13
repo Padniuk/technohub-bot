@@ -140,8 +140,9 @@ async def show_contacts(callback: CallbackQuery, session: AsyncSession):
 
     application = (await session.execute(application_select)).scalar_one()
 
-    edited_text = callback.message.text.replace("🔵 Aктивно", f"⚙️ №{application.id} виконує {worker.name}")
-
+    edited_text = callback.message.text.replace(
+        "🔵 Aктивно", f"⚙️ №{application.id} виконує {worker.name}"
+    )
 
     existance_query = select(ApplicationWorkerAssociation.status).where(
         (ApplicationWorkerAssociation.worker_id == worker.id)

@@ -187,17 +187,24 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
     await session.commit()
     await message.answer("Заявку зачинено")
 
-    application_query = select(Application).where(Application.id == data["application_id"])
+    application_query = select(Application).where(
+        Application.id == data["application_id"]
+    )
     application = (await session.execute(application_query)).scalar_one()
 
     worker_query = select(Worker).where(Worker.user_id == str(message.from_user.id))
     worker = (await session.execute(worker_query)).scalar_one()
 
-
-    text = f"✅ №{application.id} виконав {worker.name}\n\n" f'{application.problem}\n\n' f'Адреса: `{application.address}`'
+    text = (
+        f"✅ №{application.id} виконав {worker.name}\n\n"
+        f"{application.problem}\n\n"
+        f"Адреса: `{application.address}`"
+    )
 
     await EditMessageText(
-        chat_id=config.plumbing_chat_id if application.application_type == 'plumbing' else config.electricity_chat_id,
+        chat_id=config.plumbing_chat_id
+        if application.application_type == "plumbing"
+        else config.electricity_chat_id,
         text=text,
         message_id=int(application.message_id),
         reply_markup=None,
@@ -239,22 +246,30 @@ async def chose_application(message: Message, state: FSMContext, session: AsyncS
     await session.commit()
     await message.answer("Заявку зачинено")
 
-    application_query = select(Application).where(Application.id == data["application_id"])
+    application_query = select(Application).where(
+        Application.id == data["application_id"]
+    )
     application = (await session.execute(application_query)).scalar_one()
 
     worker_query = select(Worker).where(Worker.user_id == str(message.from_user.id))
     worker = (await session.execute(worker_query)).scalar_one()
 
-
-    text = f"✅ №{application.id} виконав {worker.name}\n\n" f'{application.problem}\n\n' f'Адреса: `{application.address}`'
+    text = (
+        f"✅ №{application.id} виконав {worker.name}\n\n"
+        f"{application.problem}\n\n"
+        f"Адреса: `{application.address}`"
+    )
 
     await EditMessageText(
-        chat_id=config.plumbing_chat_id if application.application_type == 'plumbing' else config.electricity_chat_id,
+        chat_id=config.plumbing_chat_id
+        if application.application_type == "plumbing"
+        else config.electricity_chat_id,
         text=text,
         message_id=int(application.message_id),
         reply_markup=None,
         parse_mode="Markdown",
     )
+
 
 @worker_router.message(CompleteStates.report, (~F.photo & ~F.document))
 async def send_photo_error(message: Message, state: FSMContext):
@@ -313,7 +328,12 @@ async def cancel_application(
 
     application_query = (
         update(ApplicationWorkerAssociation)
-        .where(and_(ApplicationWorkerAssociation.application_id == data["application_id"], ApplicationWorkerAssociation.status == 'Up'))
+        .where(
+            and_(
+                ApplicationWorkerAssociation.application_id == data["application_id"],
+                ApplicationWorkerAssociation.status == "Up",
+            )
+        )
         .values(status="Canceled", comment=data["comment"])
     )
 
