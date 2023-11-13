@@ -5,7 +5,7 @@ from aiogram.types import Message
 class PhoneFilter(BaseFilter):
     async def __call__(self, message: Message):
         phone = message.text
-        if phone[0]=='+' and phone[1:].isdigit() and len(phone) == 12:
+        if phone[0]=='+' and phone[1:].isdigit() and len(phone) == 13:
             return True
         elif phone.isdigit() and len(phone) == 12:
             return True
